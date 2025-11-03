@@ -3,6 +3,9 @@
 
 A lightweight and optimized performance rating system for BeamMP servers. Automatically calculates vehicle performance ratings and enforces server limits in real-time.
 
+![UI Screenshot 1](https://github.com/5DROR5/UIMPI/blob/main/PNG/1.png?raw=true)
+![UI Screenshot 2](https://github.com/5DROR5/UIMPI/blob/main/PNG/2.png?raw=true)
+
 ## Features
 
 - **Real-time Performance Rating** - Calculates PI (Performance Index) based on power, weight, drivetrain, grip, and braking
