@@ -1,0 +1,136 @@
+.app-container {
+    height: 100%;
+    width: 100%;
+    overflow: hidden;
+    position: relative;
+    background: none;
+    font-family: 'Segoe UI', Roboto, sans-serif;
+    font-weight: bold;
+    color: white;
+}
+
+.stats1_1 {
+    width: 100%;
+    height: 100%;
+    max-height: 55px; 
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: row; 
+    align-items: stretch;    
+    background-color: rgba(30, 30, 30, 0.25);
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 8px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+    overflow: hidden; 
+}
+
+.rating-container {
+    display: flex;
+    flex-direction: row;
+    align-items: center; 
+    justify-content: center;
+    min-width: 90px;
+    padding: 5px 8px;
+    box-sizing: border-box;
+    color: #ffffff;
+    transition: background-color 0.3s ease;    
+    text-shadow: 0px 0px 4px #000, 0px 0px 6px #000, 0px 0px 8px #000;
+}
+
+.rating-class {
+    font-size: 26px;
+    font-weight: 900; 
+}
+
+.rating-separator {
+    width: 1px;
+    height: 70%; 
+    background-color: rgba(255, 255, 255, 0.2);
+    margin: 0 6px;
+}
+
+.rating-value {
+    font-size: 26px; 
+    font-weight: 300; 
+}
+
+.stats-column {
+    flex-grow: 1; 
+    flex-basis: 0; 
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 5px 6px; 
+    background: none; 
+    overflow: hidden;    
+    border-left: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.stats-header {
+    font-size: 9px; 
+    color: #cccccc;
+    margin: 0;
+    padding: 0;
+    text-transform: uppercase;
+    white-space: nowrap;    
+    text-shadow: 0px 0px 4px #000, 0px 0px 6px #000, 0px 0px 8px #000;
+}
+
+.stats-value {
+    font-size: 14px;
+    color: #ffffff;
+    margin: 2px 0 0 0;
+    padding: 0;
+    white-space: nowrap;
+    text-shadow: 0px 0px 4px #000, 0px 0px 6px #000, 0px 0px 8px #000;
+}
+
+.ratingD { background-color: rgba(0, 112, 209, 0.85); }
+.ratingC { background-color: rgba(0, 163, 68, 0.85); }
+.ratingB { background-color: rgba(211, 0, 0, 0.85); }
+.ratingA { background-color: rgba(128, 0, 128, 0.85); }
+
+.rating-container.vehicle-denied {
+    background-color: rgba(255, 0, 0, 0.85) !important;
+    border: 2px solid #ff0000 !important;
+    animation: pulse-red 1.5s infinite;
+    box-shadow: 0 0 20px rgba(255, 0, 0, 0.8);
+    position: relative;
+}
+
+@keyframes pulse-red {
+    0%, 100% {
+        box-shadow: 0 0 10px rgba(255, 0, 0, 0.8);
+        background-color: rgba(255, 0, 0, 0.85);
+    }
+    50% {
+        box-shadow: 0 0 25px rgba(255, 0, 0, 1);
+        background-color: rgba(255, 50, 50, 0.95);
+    }
+}
+
+.rating-container.vehicle-denied::after {
+    content: "⚠";
+    position: absolute;
+    top: 2px;
+    right: 2px;
+    font-size: 12px;
+    color: #ffffff;
+    text-shadow: 0 0 3px #000;
+    animation: blink-warning 1s infinite;
+}
+
+@keyframes blink-warning {
+    0%, 50%, 100% {
+        opacity: 1;
+    }
+    25%, 75% {
+        opacity: 0.3;
+    }
+}
+
+.vehicle-denied ~ .stats-column {
+    border-left-color: rgba(255, 0, 0, 0.5);
+}
