@@ -1,0 +1,21 @@
+{
+  "domElement": "<perf></perf>",
+  "name": "A UIMPI",
+  "types": [
+    "ui.apps.categories.info"
+  ],
+  "css": {
+    "bottom":"",
+    "height":"40px",
+    "left":0,
+    "margin":"auto",
+    "position":"absolute",
+    "right":0,
+    "top":"40px",
+    "width":"1070px"
+  },
+  "description": "Static performance meter", 
+  "author": "5DROR5",
+  "version": "1.1",
+  "directive": "perf"
+}
