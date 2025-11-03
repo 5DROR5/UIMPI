@@ -1,0 +1,59 @@
+<div class="app-container" layout="column">
+	<div class="stats1_1">
+        <link type="text/css" rel="stylesheet" href="/ui/modules/apps/perf/app.css"/>
+        
+        <span class="rating-container" id="ratingdisplay1_1">
+            <span class="rating-class">
+                {{class}}
+            </span>
+            <span class="rating-separator"></span>
+            <span class="rating-value" id="ratingdisplay1_2">
+                {{rating}}
+            </span>
+        </span>
+
+        <div class="stats-column">
+            <p class="stats-header">HP</p>
+            <p class="stats-value">{{perfPower | number:0}}</p>
+        </div>
+        
+        <div class="stats-column">
+            <p class="stats-header">lbs</p>
+            <p class="stats-value">{{weight | number:0}}</p>
+        </div>
+
+        <div class="stats-column">
+            <p class="stats-header">Brakes</p> <p class="stats-value">{{brakeTorque | number:0}}</p>
+        </div>
+
+        <div class="stats-column">
+            <p class="stats-header">Grip</p> <p class="stats-value">{{avgFriction | number:4}}</p>
+        </div>
+
+        <div class="stats-column">
+            <p class="stats-header">Torque</p>
+            <p class="stats-value">{{perfTorque | number:0}}</p>
+        </div>
+
+        <div class="stats-column">
+            <p class="stats-header">Drivetrain</p>
+            <p class="stats-value">{{drivetrain}}</p>
+        </div>
+
+        <div class="stats-column">
+            <p class="stats-header">Max RPM</p>
+            <p class="stats-value">{{maxRPM | number:0}}</p>
+        </div>
+        
+        <div class="stats-column">
+            <p class="stats-header">Ind</p>
+            <p class="stats-value">{{inductionType}}</p>
+        </div>
+
+        <div class="stats-column">
+            <p class="stats-header">Gearbox</p>
+            <p class="stats-value">{{gearboxType | uppercase}} {{gearCount}}</p>
+            </div>
+        
+    </div>
+</div>
