@@ -7,10 +7,26 @@ local playerReadyStatus = {}
 local playerLastWarnedRating = {}
 local activePlayerCount = 0
 
+local function broadcastPlayerRating(playerID)
+    local rating = playerPerformanceData[playerID]
+    if not rating then return end
+
+    local playerName = MP.GetPlayerName(playerID)
+    if not playerName then return end
+
+    for pid, isReady in pairs(playerReadyStatus) do
+        if isReady then
+            local payload = string.format('{"playerName":"%s","rating":%d,"pid":%d}',
+                playerName, rating, playerID)
+            MP.TriggerClientEvent(pid, "updatePlayerPerformanceRating", payload)
+        end
+    end
+end
+
 local function SetMaxPerformanceRating(newLimit)
     MAX_PERFORMANCE_RATING = newLimit
     print("[UIMPI] Limit changed to: " .. newLimit)
-    
+
     local limitStr = tostring(MAX_PERFORMANCE_RATING)
     for playerID, isReady in pairs(playerReadyStatus) do
         if isReady then
@@ -22,29 +38,37 @@ end
 
 function onPlayerJoin(playerID)
     print("[UIMPI] Player " .. playerID .. " joined")
-    
+
     playerPerformanceData[playerID] = 0
     playerViolations[playerID] = 0
     playerReadyStatus[playerID] = true
     playerLastWarnedRating[playerID] = nil
     activePlayerCount = activePlayerCount + 1
-    
+
     MP.TriggerClientEvent(playerID, "PerfModReceiveLimit", tostring(MAX_PERFORMANCE_RATING))
-    
+
     local msg = string.format(
         "This server is limited to a Performance Rating of %d. You can see your car's rating in the UIMPI app.",
         MAX_PERFORMANCE_RATING
     )
     MP.SendChatMessage(playerID, msg)
+
+    for otherPID, isReady in pairs(playerReadyStatus) do
+        if otherPID ~= playerID and isReady then
+            broadcastPlayerRating(otherPID)
+        end
+    end
+
+    broadcastPlayerRating(playerID)
 end
 
 function onPlayerDisconnect(playerID)
     print("[UIMPI] Player " .. playerID .. " disconnected")
-    
+
     if playerPerformanceData[playerID] then
         activePlayerCount = activePlayerCount - 1
     end
-    
+
     playerPerformanceData[playerID] = nil
     playerViolations[playerID] = nil
     playerReadyStatus[playerID] = nil
@@ -53,37 +77,39 @@ end
 
 function onVehicleDataReceived(playerID, data)
     if not data or data == "" or data == "null" then return end
-    
+
     local currentRating = tonumber(string.match(data, '"rating":(%d+)'))
-    
+
     if not currentRating then return end
-    
+
     playerPerformanceData[playerID] = currentRating
-    
+
+    broadcastPlayerRating(playerID)
+
     local isVehicleAllowed = (currentRating <= MAX_PERFORMANCE_RATING)
-    
+
     if not isVehicleAllowed then
         if playerLastWarnedRating[playerID] ~= currentRating then
             print("[UIMPI] DENIED - Player: " .. playerID .. " | Rating: " .. currentRating .. " | Limit: " .. MAX_PERFORMANCE_RATING)
-            
+
             playerViolations[playerID] = (playerViolations[playerID] or 0) + 1
-            
+
             local msg = string.format(
-                "Limit: %d - Your car: %d - DENIED! Vehicle frozen.", 
-                MAX_PERFORMANCE_RATING, 
+                "Limit: %d - Your car: %d - DENIED! Vehicle frozen.",
+                MAX_PERFORMANCE_RATING,
                 currentRating
             )
             MP.SendChatMessage(playerID, msg)
             playerLastWarnedRating[playerID] = currentRating
         end
-        
+
         MP.TriggerClientEvent(playerID, "PerfModFreezeVehicle", "")
     else
         if playerLastWarnedRating[playerID] then
             MP.SendChatMessage(playerID, "Your vehicle is now within the limit. Unfrozen.")
             playerLastWarnedRating[playerID] = nil
         end
-    
+
         playerViolations[playerID] = 0
         MP.TriggerClientEvent(playerID, "PerfModUnfreezeVehicle", "")
     end
