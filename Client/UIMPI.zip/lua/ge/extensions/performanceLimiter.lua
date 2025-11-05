@@ -1,5 +1,63 @@
 local M = {}
 
+local playerRatings = {}
+
+local function updatePlayerRatingSuffix(playerName, rating)
+    if type(MPVehicleGE) == "table" and type(MPVehicleGE.setPlayerNickSuffix) == "function" then
+        local suffix = string.format("[%d]", rating)
+        MPVehicleGE.setPlayerNickSuffix(playerName, "performance_rating_suffix", suffix)
+        print(string.format("[UIMPI] Set rating suffix for '%s': %s", playerName, suffix))
+    end
+end
+
+local function onReceivePlayerRating(payload)
+    if not payload or payload == "" then return end
+
+    local playerName, rating, pid
+
+    if type(payload) == "string" then
+        playerName = string.match(payload, '"playerName":"([^"]+)"')
+        rating = tonumber(string.match(payload, '"rating":(%d+)'))
+        pid = tonumber(string.match(payload, '"pid":(%d+)'))
+    end
+
+    if not playerName or not rating then
+        print("[UIMPI] Failed to parse rating payload: " .. tostring(payload))
+        return
+    end
+
+    print(string.format("[UIMPI] Received rating for '%s' (PID: %s): %d", playerName, tostring(pid), rating))
+
+    playerRatings[playerName] = rating
+
+    updatePlayerRatingSuffix(playerName, rating)
+end
+
+local function try_register_rating_events()
+    if M.registered_rating_events then return end
+    if type(AddEventHandler) == "function" then
+        AddEventHandler("updatePlayerPerformanceRating", onReceivePlayerRating)
+        M.registered_rating_events = true
+        print("[UIMPI] Registered rating event handlers")
+    end
+end
+
+local original_try_register = try_register
+try_register = function()
+    original_try_register()
+    try_register_rating_events()
+end
+
+local original_onUpdate = M.onUpdate
+M.onUpdate = function(dt)
+    if not M.registered_rating_events then
+        try_register_rating_events()
+    end
+    original_onUpdate(dt)
+end
+
+try_register_rating_events()
+
 local serverLimit = 999
 local frozen = false
 local lastVehicleID = nil
@@ -59,7 +117,7 @@ local function buildFullJSON()
         vdata.ratingRounded,
         vdata.maxRPM,
         vdata.gearboxType,
-        vdata.gearCount, 
+        vdata.gearCount,
         vdata.inductionType,
         vdata.serverMaxRating,
         tostring(vdata.isVehicleAllowed)
@@ -69,7 +127,7 @@ end
 local function calculatePI(vdata, maxLimit)
     local p = tonumber(vdata.perfPower) or 0
     local w = tonumber(vdata.weight) or 0
-    
+
     local ratingData = {
         rating = 0,
         class = "D",
@@ -77,54 +135,54 @@ local function calculatePI(vdata, maxLimit)
         isVehicleAllowed = true,
         serverMaxRating = maxLimit
     }
-    
+
     if p <= 0 or w <= 0 then return ratingData end
-    
+
     local pwRatio = w / p
     local tqPerTon = (tonumber(vdata.perfTorque) or 0) / (w / 1000)
     local est060 = 0.96 * pwRatio
-    
+
     local accel = math.max(0, math.min(100, 100 * (1 - math.pow(math.min(est060, 6.80) / 6.80, 0.8))))
     accel = accel * (1 + math.min(0.15, (tqPerTon - 150) / 1000))
-    
+
     local dtMult = 1.0
-    if vdata.drivetrain == "AWD" then 
+    if vdata.drivetrain == "AWD" then
         dtMult = 1.08
-    elseif vdata.drivetrain == "FWD" then 
-        dtMult = 0.97 
+    elseif vdata.drivetrain == "FWD" then
+        dtMult = 0.97
     end
     accel = math.min(100, accel * dtMult)
-    
+
     local speed = math.max(0, math.min(100, math.pow((p / w) * 453.6, 0.7) * 15))
-    
+
     local f = tonumber(vdata.avgFriction) or 1.0
     local grip = 1.0
     if f > 1.5 and f < 2.5 then
         grip = 1.0 + ((f - 1.5) / 1.0) * 0.2
     elseif f >= 2.5 then
         grip = 1.2
-    end   
-    
+    end
+
     local brake = math.max(0.8, math.min(1.2, 0.7 + ((tonumber(vdata.brakeTorque) or 0) / w / 22.05)))
-    
+
     local base = (accel * 0.6 + speed * 0.4) * 10
     local final = base * grip * brake
-    
+
     ratingData.ratingRounded = math.floor(final + 0.5)
     ratingData.rating = math.floor(ratingData.ratingRounded / 4)
-    
-    if ratingData.rating < 100 then 
+
+    if ratingData.rating < 100 then
         ratingData.class = "D"
-    elseif ratingData.rating < 200 then 
+    elseif ratingData.rating < 200 then
         ratingData.class = "C"
-    elseif ratingData.rating < 300 then 
+    elseif ratingData.rating < 300 then
         ratingData.class = "B"
-    else 
-        ratingData.class = "A" 
+    else
+        ratingData.class = "A"
     end
-    
-    ratingData.isVehicleAllowed = (ratingData.rating <= maxLimit) 
-    
+
+    ratingData.isVehicleAllowed = (ratingData.rating <= maxLimit)
+
     return ratingData
 end
 
@@ -163,17 +221,17 @@ end
 
 local function collect()
     local v = be:getPlayerVehicle(0)
-    if not v then 
+    if not v then
         dataCollected = false
-        return 
+        return
     end
-    
+
     local currentVehicleID = v:getID()
     if currentVehicleID ~= lastVehicleID then
         lastVehicleID = currentVehicleID
         dataCollected = false
     end
-    
+
     v:queueLuaCommand([[
         local hp, torque, maxRPM, weight = 0, 0, 0, 0
         local propulsed, total = 0, 0
@@ -182,39 +240,34 @@ local function collect()
         local avgFriction, frictionCount = 0, 0
         local gearboxType, gearCount = "N/A", 0
         local inductionType = "NA"
-        
-        -- Engine data
+
         local engines = powertrain.getDevicesByCategory("engine")
         if engines and engines[1] then
             hp = engines[1].maxPower * 0.986
             torque = engines[1].maxTorque
             maxRPM = engines[1].maxRPM
         end
-        
-        -- Weight
+
         weight = obj:calcBeamStats().total_weight
-        
-        -- Wheels and drivetrain
+
         if wheels and wheels.wheels then
             for _, w in pairs(wheels.wheels) do
                 total = total + 1
                 if w.isPropulsed then propulsed = propulsed + 1 end
             end
-            if propulsed == total then 
-                drivetrain = "AWD" 
-            elseif propulsed > 0 and propulsed < total then 
-                drivetrain = "AWD" 
+            if propulsed == total then
+                drivetrain = "AWD"
+            elseif propulsed > 0 and propulsed < total then
+                drivetrain = "AWD"
             end
         end
-        
-        -- Brakes
+
         if wheels and wheels.wheelRotators then
             for _, w in pairs(wheels.wheelRotators) do
                 if w.brakeTorque then brakeTorque = brakeTorque + w.brakeTorque end
             end
         end
-        
-        -- Friction
+
         if v and v.data and v.data.wheels then
             for i = 0, tableSizeC(v.data.wheels or {}) - 1 do
                 local w = v.data.wheels[i]
@@ -225,8 +278,7 @@ local function collect()
             end
             if frictionCount > 0 then avgFriction = avgFriction / frictionCount end
         end
-        
-        -- Gearbox
+
         local gearboxes = powertrain.getDevicesByCategory("gearbox")
         if gearboxes and gearboxes[1] then
             local t = gearboxes[1].type
@@ -238,8 +290,7 @@ local function collect()
             else gearboxType = "Other" end
             gearCount = gearboxes[1].gearsForward or (gearboxes[1].config and gearboxes[1].config.gearsForward) or 0
         end
-        
-        -- Induction
+
         local combustionEngines = powertrain.getDevicesByType("combustionEngine")
         local hasTurbo, hasSupercharger = false, false
         for _, en in pairs(combustionEngines) do
@@ -249,15 +300,14 @@ local function collect()
         if hasTurbo and hasSupercharger then inductionType = "Turbo+SC"
         elseif hasTurbo then inductionType = "Turbo"
         elseif hasSupercharger then inductionType = "SC" end
-        
-        -- Send all data in one call
+
         obj:queueGameEngineLua(string.format(
             "extensions.performanceLimiter.setBulkData(%f,%f,%f,%f,%f,'%s',%d,%d,%f,'%s',%d,'%s')",
-            hp, torque, weight, maxRPM, brakeTorque, drivetrain, propulsed, total, 
+            hp, torque, weight, maxRPM, brakeTorque, drivetrain, propulsed, total,
             avgFriction, gearboxType, gearCount, inductionType
         ))
     ]])
-    
+
     dataCollected = true
 end
 
@@ -316,7 +366,7 @@ local function sendToServer()
     if not (dataCollected and vdata.hp > 0 and vdata.weight > 0) then
         return false
     end
-    
+
     if type(TriggerServerEvent) == "function" then
         TriggerServerEvent("PerfModCheckVehicle", buildVehicleJSON())
         return true
@@ -332,18 +382,18 @@ local function onUpdate(dt)
     lastUpdate = lastUpdate + dt
     lastSend = lastSend + dt
     lastFreezeCheck = lastFreezeCheck + dt
-    
+
     if lastUpdate >= 1.0 then
         lastUpdate = 0
         collect()
     end
-    
+
     if lastSend >= 0.5 then
         lastSend = 0
-        
+
         if dataCollected and vdata.hp > 0 and vdata.weight > 0 then
             local ratingData = calculatePI(vdata, serverLimit)
-            
+
             vdata.rating = ratingData.rating
             vdata.class = ratingData.class
             vdata.ratingRounded = ratingData.ratingRounded
@@ -353,17 +403,17 @@ local function onUpdate(dt)
             sendToServer()
         end
     end
-    
+
     if frozen and lastFreezeCheck >= 0.5 then
         lastFreezeCheck = 0
         local v = be:getPlayerVehicle(0)
-        if v then 
-            core_vehicleBridge.executeAction(v, 'setFreeze', true) 
+        if v then
+            core_vehicleBridge.executeAction(v, 'setFreeze', true)
         end
     end
 end
 
-M.onUpdate = onUpdate 
+M.onUpdate = onUpdate
 M.requestServerLimit = requestLimit
 
 try_register()
