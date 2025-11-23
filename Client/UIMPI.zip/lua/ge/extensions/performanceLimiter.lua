@@ -255,10 +255,50 @@ local function collect()
                 total = total + 1
                 if w.isPropulsed then propulsed = propulsed + 1 end
             end
-            if propulsed == total then
-                drivetrain = "AWD"
-            elseif propulsed > 0 and propulsed < total then
-                drivetrain = "AWD"
+
+            if propulsed > 0 and total > 0 then
+                if propulsed >= total then
+                    drivetrain = "AWD"
+                elseif total <= 4 and total > 1 then
+                    local ref = v.data.nodes[v.data.refNodes[0].ref].pos
+                    local back = v.data.nodes[v.data.refNodes[0].back].pos
+                    local vectorForward = vec3(ref) - vec3(back)
+                    
+                    local avgWheelPos = vec3(0, 0, 0)
+                    for _, wd in pairs(wheels.wheels) do 
+                        avgWheelPos = avgWheelPos + vec3(v.data.nodes[wd.node1].pos)
+                    end
+                    avgWheelPos = avgWheelPos / total
+                    
+                    local frontPropulsed = 0
+                    local rearPropulsed = 0
+                    
+                    for _, wd in pairs(wheels.wheels) do 
+                        if wd.isPropulsed then 
+                            local wheelNodePos = vec3(v.data.nodes[wd.node1].pos)
+                            local wheelVector = wheelNodePos - avgWheelPos
+                            local dotForward = vectorForward:dot(wheelVector)
+                            
+                            if dotForward >= 0 then 
+                                frontPropulsed = frontPropulsed + 1
+                            else 
+                                rearPropulsed = rearPropulsed + 1
+                            end 
+                        end 
+                    end
+                    
+                    if frontPropulsed > 0 and rearPropulsed > 0 then 
+                        drivetrain = "AWD" 
+                    elseif frontPropulsed > 0 then 
+                        drivetrain = "FWD" 
+                    else 
+                        drivetrain = "RWD" 
+                    end
+                else
+                    drivetrain = "AWD"
+                end
+            else
+                 drivetrain = "RWD" 
             end
         end
 
