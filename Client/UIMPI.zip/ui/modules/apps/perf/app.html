@@ -59,4 +59,29 @@
             </div>
         </div>
     </div>
+
+    <div class="vote-panel" ng-show="voteActive">
+        <div class="vote-header">
+            <span class="vote-title">🗳️ Performance Limit Vote</span>
+            <span class="vote-timer">{{voteTimeLeft}}s</span>
+        </div>
+        
+        <div class="vote-options">
+            <div class="vote-option" 
+                 ng-repeat="opt in voteOptions track by $index"
+                 ng-class="{'voted': opt.option === userVote, 'winner': opt.votes > 0 && opt.votes === maxVotes}"
+                 ng-click="castVote(opt.option)">
+                <div class="vote-option-value">{{opt.option}}</div>
+                <div class="vote-option-bar">
+                    <div class="vote-option-bar-fill" ng-style="{'width': opt.percentage + '%'}"></div>
+                </div>
+                <div class="vote-option-count">{{opt.votes}} votes</div>
+            </div>
+        </div>
+        
+        <div class="vote-footer">
+            <span ng-if="userVote">You voted: {{userVote}}</span>
+            <span ng-if="!userVote">Click to vote!</span>
+        </div>
+    </div>
 </div>
