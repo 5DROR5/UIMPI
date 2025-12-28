@@ -1,4 +1,4 @@
-angular.module("beamng.apps").directive("perf", ['$timeout', function ($timeout) {
+angular.module("beamng.apps").directive("perf", ['$timeout', '$interval', function ($timeout, $interval) {
     return {
         templateUrl: '/ui/modules/apps/perf/app.html',
         replace: true,
@@ -24,11 +24,34 @@ angular.module("beamng.apps").directive("perf", ['$timeout', function ($timeout)
             scope.gearboxType = "N/A";
             scope.gearCount = 0;
             scope.inductionType = "NA";
-
             scope.statsVisible = true;
+
+            scope.voteActive = false;
+            scope.voteOptions = [];
+            scope.voteTimeLeft = 0;
+            scope.userVote = null;
+            scope.maxVotes = 0;
+            let voteTimer = null;
+            let voteDuration = 60;
+            let voteStartTime = 0;
 
             scope.toggleStats = function () {
                 scope.statsVisible = !scope.statsVisible;
+            };
+
+            scope.castVote = function(option) {
+                if (!scope.voteActive) return;
+                scope.userVote = option;
+                
+                try {
+                    bngApi.engineLua(`
+                        if extensions.performanceLimiter then
+                            extensions.performanceLimiter.vote(${option})
+                        end
+                    `);
+                } catch (e) {
+                    console.error('[UI-MPI] Error casting vote:', e);
+                }
             };
 
             let updatePending = false;
@@ -81,6 +104,127 @@ angular.module("beamng.apps").directive("perf", ['$timeout', function ($timeout)
                 }
             };
 
+            scope.startVote = function(dataJson) {
+                try {
+                    let data = {};
+                    if (typeof dataJson === 'string') {
+                        data = JSON.parse(dataJson);
+                    } else {
+                        data = dataJson;
+                    }
+
+                    scope.voteActive = true;
+                    scope.userVote = null;
+                    voteDuration = data.duration || 60;
+                    voteStartTime = Date.now() / 1000;
+                    
+                    scope.voteOptions = [];
+                    if (data.options) {
+                        for (let i = 0; i < data.options.length; i++) {
+                            scope.voteOptions.push({
+                                option: data.options[i],
+                                votes: 0,
+                                percentage: 0
+                            });
+                        }
+                    }
+
+                    if (voteTimer) {
+                        $interval.cancel(voteTimer);
+                    }
+                    
+                    voteTimer = $interval(function() {
+                        let elapsed = (Date.now() / 1000) - voteStartTime;
+                        scope.voteTimeLeft = Math.max(0, Math.ceil(voteDuration - elapsed));
+                        
+                        if (scope.voteTimeLeft <= 0) {
+                            $interval.cancel(voteTimer);
+                            voteTimer = null;
+                            
+                            $timeout(function() {
+                                if (scope.voteActive) {
+                                    scope.voteActive = false;
+                                    scope.voteOptions = [];
+                                    scope.userVote = null;
+                                }
+                            }, 1000);
+                        }
+                    }, 100);
+
+                    if (!scope.$$phase) {
+                        scope.$apply();
+                    }
+
+                } catch (e) {
+                    console.error('[UI-MPI] Error starting vote:', e);
+                }
+            };
+
+            scope.updateVoteResults = function(resultsJson) {
+                try {
+                    let results = [];
+                    if (typeof resultsJson === 'string') {
+                        results = JSON.parse(resultsJson);
+                    } else {
+                        results = resultsJson;
+                    }
+
+                    let totalVotes = 0;
+                    scope.maxVotes = 0;
+
+                    for (let i = 0; i < results.length; i++) {
+                        totalVotes += results[i].votes || 0;
+                        if (results[i].votes > scope.maxVotes) {
+                            scope.maxVotes = results[i].votes;
+                        }
+                    }
+
+                    for (let i = 0; i < results.length; i++) {
+                        let opt = scope.voteOptions.find(o => o.option === results[i].option);
+                        if (opt) {
+                            opt.votes = results[i].votes || 0;
+                            opt.percentage = totalVotes > 0 ? (opt.votes / totalVotes) * 100 : 0;
+                        }
+                    }
+
+                    if (!scope.$$phase) {
+                        scope.$apply();
+                    }
+
+                } catch (e) {
+                    console.error('[UI-MPI] Error updating vote results:', e);
+                }
+            };
+
+            scope.endVote = function(dataJson) {
+                try {
+                    let data = {};
+                    if (typeof dataJson === 'string') {
+                        data = JSON.parse(dataJson);
+                    } else {
+                        data = dataJson;
+                    }
+
+                    scope.voteActive = false;
+                    scope.userVote = null;
+                    scope.voteOptions = [];
+                    scope.maxVotes = 0;
+                    scope.voteTimeLeft = 0;
+
+                    if (voteTimer) {
+                        $interval.cancel(voteTimer);
+                        voteTimer = null;
+                    }
+
+                    if (!scope.$$phase) {
+                        scope.$apply();
+                    }
+
+                } catch (e) {
+                    console.error('[UI-MPI] Error ending vote:', e);
+                }
+            };
+
             function updateVisualClass() {
                 let displayedRating = parseInt(scope.rating);
                 let ratingClass = 'ratingD';
@@ -107,6 +251,18 @@ angular.module("beamng.apps").directive("perf", ['$timeout', function ($timeout)
 
             scope.$on('PerformanceLimiterUpdateData', function (event, data) {
                 scope.updateData(data);
+            });
+
+            scope.$on('PerfModVoteStarted', function (event, data) {
+                scope.startVote(data);
+            });
+
+            scope.$on('PerfModVoteUpdate', function (event, data) {
+                scope.updateVoteResults(data);
+            });
+
+            scope.$on('PerfModVoteEnded', function (event, data) {
+                scope.endVote(data);
             });
 
             $timeout(function () {
@@ -148,6 +304,15 @@ angular.module("beamng.apps").directive("perf", ['$timeout', function ($timeout)
             scope.$on('VehicleConfigChanged', vehicleChangeHandler);
             scope.$on('$destroy', function () {
                 updatePending = false;
+                
+                if (voteTimer) {
+                    $interval.cancel(voteTimer);
+                    voteTimer = null;
+                }
+                
+                scope.voteActive = false;
+                scope.voteOptions = [];
+                scope.userVote = null;
             });
         }
     };
