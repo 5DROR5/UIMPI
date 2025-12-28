@@ -6,7 +6,6 @@ local function updatePlayerRatingSuffix(playerName, rating)
     if type(MPVehicleGE) == "table" and type(MPVehicleGE.setPlayerNickSuffix) == "function" then
         local suffix = string.format("[%d]", rating)
         MPVehicleGE.setPlayerNickSuffix(playerName, "performance_rating_suffix", suffix)
-        print(string.format("[UIMPI] Set rating suffix for '%s': %s", playerName, suffix))
     end
 end
 
@@ -21,15 +20,9 @@ local function onReceivePlayerRating(payload)
         pid = tonumber(string.match(payload, '"pid":(%d+)'))
     end
 
-    if not playerName or not rating then
-        print("[UIMPI] Failed to parse rating payload: " .. tostring(payload))
-        return
-    end
-
-    print(string.format("[UIMPI] Received rating for '%s' (PID: %s): %d", playerName, tostring(pid), rating))
+    if not playerName or not rating then return end
 
     playerRatings[playerName] = rating
-
     updatePlayerRatingSuffix(playerName, rating)
 end
 
@@ -38,25 +31,16 @@ local function try_register_rating_events()
     if type(AddEventHandler) == "function" then
         AddEventHandler("updatePlayerPerformanceRating", onReceivePlayerRating)
         M.registered_rating_events = true
-        print("[UIMPI] Registered rating event handlers")
     end
 end
 
 local original_try_register = try_register
 try_register = function()
-    original_try_register()
+    if original_try_register then
+        original_try_register()
+    end
     try_register_rating_events()
 end
-
-local original_onUpdate = M.onUpdate
-M.onUpdate = function(dt)
-    if not M.registered_rating_events then
-        try_register_rating_events()
-    end
-    original_onUpdate(dt)
-end
-
-try_register_rating_events()
 
 local serverLimit = 999
 local frozen = false
@@ -88,6 +72,11 @@ local lastUpdate = 0
 local lastSend = 0
 local lastFreezeCheck = 0
 local dataCollected = false
+
+local voteActive = false
+local voteOptions = {}
+local voteDuration = 0
+local voteElapsed = 0
 
 local function buildVehicleJSON()
     return string.format(
@@ -298,7 +287,7 @@ local function collect()
                     drivetrain = "AWD"
                 end
             else
-                 drivetrain = "RWD" 
+                drivetrain = "RWD" 
             end
         end
 
@@ -383,6 +372,28 @@ M.getVehicleData = function()
     return vdata
 end
 
+local function onVoteStarted(data)
+    if not data or data == "" then return end
+    voteActive = true
+    guihooks.trigger('PerfModVoteStarted', data)
+end
+
+local function onVoteUpdate(results)
+    if not voteActive then return end
+    guihooks.trigger('PerfModVoteUpdate', results)
+end
+
+local function onVoteEnded(data)
+    voteActive = false
+    guihooks.trigger('PerfModVoteEnded', data)
+end
+
+M.vote = function(option)
+    if not voteActive then return end
+    if type(TriggerServerEvent) ~= "function" then return end
+    TriggerServerEvent("PerfModPlayerVote", tostring(option))
+end
+
 local function onReceiveLimit(limitStr)
     local newLimit = tonumber(limitStr)
     if newLimit then
@@ -398,6 +409,9 @@ local function try_register()
         AddEventHandler("PerfModReceiveLimit", onReceiveLimit)
         AddEventHandler("PerfModFreezeVehicle", freeze)
         AddEventHandler("PerfModUnfreezeVehicle", unfreeze)
+        AddEventHandler("PerfModVoteStarted", onVoteStarted)
+        AddEventHandler("PerfModVoteUpdate", onVoteUpdate)
+        AddEventHandler("PerfModVoteEnded", onVoteEnded)
         M.registered_events = true
     end
 end
@@ -417,6 +431,10 @@ end
 local function onUpdate(dt)
     if not M.registered_events then
         try_register()
+    end
+    
+    if not M.registered_rating_events then
+        try_register_rating_events()
     end
 
     lastUpdate = lastUpdate + dt
@@ -457,5 +475,6 @@ M.onUpdate = onUpdate
 M.requestServerLimit = requestLimit
 
 try_register()
+try_register_rating_events()
 
 return M
