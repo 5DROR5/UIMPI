@@ -121,12 +121,8 @@
 }
 
 @keyframes blink-warning {
-    0%, 50%, 100% {
-        opacity: 1;
-    }
-    25%, 75% {
-        opacity: 0.3;
-    }
+    0%, 50%, 100% { opacity: 1;   }
+    25%, 75%      { opacity: 0.3; }
 }
 
 .vehicle-denied ~ .stats-column {
@@ -163,7 +159,7 @@
 
 @keyframes bannerSlideDown {
     from { opacity: 0; transform: translateY(-6px); }
-    to   { opacity: 1; transform: translateY(0); }
+    to   { opacity: 1; transform: translateY(0);    }
 }
 
 .over-limit-row1 {
@@ -219,33 +215,14 @@
     overflow-y: auto;
 }
 
-.vote-panel::-webkit-scrollbar {
-    width: 8px;
-}
-
-.vote-panel::-webkit-scrollbar-track {
-    background: rgba(0, 0, 0, 0.3);
-    border-radius: 4px;
-}
-
-.vote-panel::-webkit-scrollbar-thumb {
-    background: rgba(0, 255, 136, 0.5);
-    border-radius: 4px;
-}
-
-.vote-panel::-webkit-scrollbar-thumb:hover {
-    background: rgba(0, 255, 136, 0.8);
-}
+.vote-panel::-webkit-scrollbar       { width: 8px; }
+.vote-panel::-webkit-scrollbar-track { background: rgba(0, 0, 0, 0.3); border-radius: 4px; }
+.vote-panel::-webkit-scrollbar-thumb { background: rgba(0, 255, 136, 0.5); border-radius: 4px; }
+.vote-panel::-webkit-scrollbar-thumb:hover { background: rgba(0, 255, 136, 0.8); }
 
 @keyframes slideDown {
-    from {
-        opacity: 0;
-        transform: translateY(-20px);
-    }
-    to {
-        opacity: 1;
-        transform: translateY(0);
-    }
+    from { opacity: 0; transform: translateY(-20px); }
+    to   { opacity: 1; transform: translateY(0);     }
 }
 
 .vote-header {
@@ -273,12 +250,8 @@
 }
 
 @keyframes pulse-timer {
-    0%, 100% {
-        transform: scale(1);
-    }
-    50% {
-        transform: scale(1.1);
-    }
+    0%, 100% { transform: scale(1);   }
+    50%      { transform: scale(1.1); }
 }
 
 .vote-options {
@@ -361,7 +334,7 @@
     font-weight: 600;
 }
 
-.perf-maxed {
+.perf-maxed  {
     color: #ff4444 !important;
     text-shadow: 0px 0px 6px rgba(255, 68, 68, 0.8), 0px 0px 8px #000 !important;
 }
@@ -371,7 +344,22 @@
     text-shadow: 0px 0px 6px rgba(255, 170, 0, 0.8), 0px 0px 8px #000 !important;
 }
 
-.perf-low {
+.perf-low    {
     color: #00ff88 !important;
     text-shadow: 0px 0px 6px rgba(0, 255, 136, 0.8), 0px 0px 8px #000 !important;
+}
+
+.rtl .over-limit-banner,
+.rtl .vote-panel,
+.rtl .vote-footer {
+    direction: rtl;
+    text-align: right;
+}
+
+.rtl .vote-header {
+    flex-direction: row-reverse;
+}
+
+.rtl .vote-option:hover {
+    transform: translateX(-3px);
 }

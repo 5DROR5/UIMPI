@@ -22,6 +22,7 @@ local playerPerformanceData  = {}
 local playerViolations       = {}
 local playerReadyStatus      = {}
 local playerLastWarnedRating = {}
+local playerLang             = {}
 local activePlayerCount      = 0
 
 local voteInProgress  = false
@@ -80,6 +81,91 @@ local function loadConfig()
 end
 
 -- =============================================================================
+-- LANGUAGE & TRANSLATIONS
+-- =============================================================================
+local BEAMNG_LOCALE_MAP = {
+    ["he"]      = "he",      ["he-IL"]  = "he",
+    ["en"]      = "en",      ["en-US"]  = "en",      ["en-GB"]  = "en",
+    ["ar"]      = "ar",      ["ar-SA"]  = "ar",      ["ar-EG"]  = "ar",
+    ["de"]      = "de",      ["de-DE"]  = "de",      ["de-AT"]  = "de",      ["de-CH"] = "de",
+    ["it"]      = "it",      ["it-IT"]  = "it",
+    ["fr"]      = "fr",      ["fr-FR"]  = "fr",      ["fr-BE"]  = "fr",      ["fr-CH"] = "fr",
+    ["es"]      = "es",      ["es-ES"]  = "es",      ["es-MX"]  = "es",
+    ["ru"]      = "ru",      ["ru-RU"]  = "ru",
+    ["cs"]      = "cs",      ["cs-CZ"]  = "cs",
+    ["hu"]      = "hu",      ["hu-HU"]  = "hu",
+    ["ja"]      = "ja_JP",   ["ja-JP"]  = "ja_JP",
+    ["pl"]      = "pl_PL",   ["pl-PL"]  = "pl_PL",
+    ["pt-BR"]   = "pt_BR",
+    ["pt"]      = "pt_PT",   ["pt-PT"]  = "pt_PT",
+    ["sv"]      = "sv_SE",   ["sv-SE"]  = "sv_SE",
+    ["tr"]      = "tr_TR",   ["tr-TR"]  = "tr_TR",
+    ["uk"]      = "uk",      ["uk-UA"]  = "uk",
+    ["zh"]      = "zh_Hans", ["zh-CN"]  = "zh_Hans", ["zh-Hans"] = "zh_Hans",
+}
+
+local function resolveBeamNGLocale(beamng_lang)
+    if not beamng_lang or beamng_lang == "" then return nil end
+    local mapped = BEAMNG_LOCALE_MAP[beamng_lang]
+    if mapped then return mapped end
+    local prefix = beamng_lang:match("^([a-zA-Z]+)")
+    return prefix and BEAMNG_LOCALE_MAP[prefix:lower()]
+end
+
+local translations = {}
+
+local function loadTranslations()
+    local langs = { "he", "en", "ar", "de", "it", "fr", "es", "ru", "cs", "hu", "ja_JP", "pl_PL", "pt_BR", "pt_PT", "sv_SE", "tr_TR", "uk", "zh_Hans" }
+    local count = 0
+    for _, code in ipairs(langs) do
+        local path = ROOT .. "/lang/" .. code .. ".json"
+        local raw  = readFile(path)
+        translations[code] = raw and (decodeJSON(raw) or {}) or {}
+        if raw then count = count + 1 end
+    end
+    print("[PerformanceLimiter] Translations loaded for " .. count .. " languages")
+end
+
+local function translate(lang, key, vars)
+    local text = (translations[lang] or {})[key] or (translations["en"] or {})[key] or key
+    if vars then
+        for k, v in pairs(vars) do
+            text = text:gsub("${" .. k .. "}", tostring(v))
+        end
+    end
+    return text
+end
+
+local function translateForPlayer(pid, key, vars)
+    local lang = (pid == -1) and "en" or (playerLang[pid] or "en")
+    return translate(lang, key, vars)
+end
+
+local function broadcastTranslated(key, vars)
+    for pid, isReady in pairs(playerReadyStatus) do
+        if isReady then
+            MP.SendChatMessage(pid, translateForPlayer(pid, key, vars))
+        end
+    end
+end
+
+-- Sends only the keys needed by the client UI
+local CLIENT_KEYS = {
+    "banner_limit", "banner_over", "banner_tip",
+    "vote_title", "vote_votes", "vote_you_voted", "vote_click_to_vote"
+}
+local function sendTranslationsToClient(playerID)
+    local lang  = playerLang[playerID] or "en"
+    local t     = translations[lang]   or translations["en"] or {}
+    local parts = { string.format('"lang":"%s"', lang) }
+    for _, k in ipairs(CLIENT_KEYS) do
+        local v = (t[k] or ""):gsub('\\', '\\\\'):gsub('"', '\\"')
+        parts[#parts + 1] = string.format('"%s":"%s"', k, v)
+    end
+    MP.TriggerClientEvent(playerID, "PerfModTranslations", "{" .. table.concat(parts, ",") .. "}")
+end
+
+-- =============================================================================
 -- UTILITIES
 -- =============================================================================
 local function getDisplayLimit()
@@ -122,7 +208,7 @@ local function SetMaxPerformanceRating(newLimit)
     for playerID, isReady in pairs(playerReadyStatus) do
         if isReady then
             MP.TriggerClientEvent(playerID, "PerfModReceiveLimit", tostring(displayLimit))
-            MP.SendChatMessage(playerID, "Performance limit changed to: " .. displayLimit)
+            MP.SendChatMessage(playerID, translateForPlayer(playerID, "perf_limit_changed", {limit = displayLimit}))
         end
     end
 end
@@ -146,7 +232,7 @@ end
 local function endVote(forced)
     if not voteInProgress then return end
     local winningOption = MAX_PERFORMANCE_RATING
-    local maxVotes  = 0
+    local maxVotes   = 0
     local totalVotes = 0
     for option, count in pairs(voteCounts) do
         totalVotes = totalVotes + count
@@ -161,12 +247,12 @@ local function endVote(forced)
     if totalVotes > 0 then
         SetMaxPerformanceRating(winningOption)
         local displayLimit = getDisplayLimit()
-        MP.SendChatMessage(-1, "━━━━━━━━━━━━━━━━━━━━━━━━━━")
-        MP.SendChatMessage(-1, string.format("[VOTE] Vote ended! New limit: %d", displayLimit))
-        MP.SendChatMessage(-1, string.format("[VOTE] Total votes: %d | Winning votes: %d", totalVotes, maxVotes))
-        MP.SendChatMessage(-1, "━━━━━━━━━━━━━━━━━━━━━━━━━━")
+        broadcastTranslated("vote_separator")
+        broadcastTranslated("vote_ended_new_limit",  {limit   = displayLimit})
+        broadcastTranslated("vote_ended_stats",      {total   = totalVotes, winning = maxVotes})
+        broadcastTranslated("vote_separator")
     else
-        MP.SendChatMessage(-1, "[VOTE] Vote ended with no votes - limit unchanged")
+        broadcastTranslated("vote_ended_no_votes")
     end
     local endData = string.format('{"winner":%d,"totalVotes":%d,"forced":%s}',
         winningOption, totalVotes, tostring(forced or false))
@@ -175,11 +261,11 @@ end
 
 local function startVote(playerID)
     if not isAdmin(playerID) then
-        MP.SendChatMessage(playerID, "Only admins can start a vote")
+        MP.SendChatMessage(playerID, translateForPlayer(playerID, "vote_only_admins_start"))
         return
     end
     if voteInProgress then
-        MP.SendChatMessage(playerID, "A vote is already in progress!")
+        MP.SendChatMessage(playerID, translateForPlayer(playerID, "vote_already_in_progress"))
         return
     end
     voteInProgress  = true
@@ -188,9 +274,9 @@ local function startVote(playerID)
     voteStartTime   = os.time()
     voteStarterName = MP.GetPlayerName(playerID)
     for _, option in ipairs(VOTE_OPTIONS) do voteCounts[option] = 0 end
-    MP.SendChatMessage(-1, string.format("[VOTE] %s started a performance limit vote!", voteStarterName))
-    MP.SendChatMessage(-1, "[VOTE] You have " .. VOTE_DURATION .. " seconds to vote!")
-    MP.SendChatMessage(-1, "[VOTE] Use the UI or type /vote [value]")
+    broadcastTranslated("vote_started_broadcast", {name     = voteStarterName})
+    broadcastTranslated("vote_time_announcement", {duration = VOTE_DURATION})
+    broadcastTranslated("vote_use_ui")
     local optionsStr = table.concat(VOTE_OPTIONS, ",")
     local voteData = string.format('{"options":[%s],"duration":%d,"starter":"%s"}',
         optionsStr, VOTE_DURATION, voteStarterName)
@@ -199,7 +285,7 @@ end
 
 function onPlayerVote(playerID, voteOption)
     if not voteInProgress then
-        MP.SendChatMessage(playerID, "No vote is currently in progress")
+        MP.SendChatMessage(playerID, translateForPlayer(playerID, "vote_no_in_progress"))
         return
     end
     local option = tonumber(voteOption)
@@ -208,7 +294,7 @@ function onPlayerVote(playerID, voteOption)
         if opt == option then validOption = true break end
     end
     if not validOption then
-        MP.SendChatMessage(playerID, "Invalid vote option. Available: " .. table.concat(VOTE_OPTIONS, ", "))
+        MP.SendChatMessage(playerID, translateForPlayer(playerID, "vote_invalid_option", {options = table.concat(VOTE_OPTIONS, ", ")}))
         return
     end
     if votedPlayers[playerID] then
@@ -217,7 +303,7 @@ function onPlayerVote(playerID, voteOption)
     end
     voteCounts[option] = (voteCounts[option] or 0) + 1
     votedPlayers[playerID] = option
-    MP.SendChatMessage(playerID, string.format("✓ You voted for limit: %d", option))
+    MP.SendChatMessage(playerID, translateForPlayer(playerID, "vote_cast", {option = option}))
     broadcastVoteResults()
 end
 
@@ -225,10 +311,10 @@ function onVoteTimerTick()
     if not voteInProgress then return end
     local elapsed  = os.time() - voteStartTime
     local timeLeft = VOTE_DURATION - elapsed
-    if     timeLeft == 10 then MP.SendChatMessage(-1, "[VOTE] 10 seconds left to vote!")
-    elseif timeLeft == 5  then MP.SendChatMessage(-1, "[VOTE] 5 seconds left!")
-    elseif timeLeft == 3  then MP.SendChatMessage(-1, "[VOTE] 3 seconds!")
-    elseif timeLeft == 1  then MP.SendChatMessage(-1, "[VOTE] 1 second!")
+    if     timeLeft == 10 then broadcastTranslated("vote_timer_10")
+    elseif timeLeft == 5  then broadcastTranslated("vote_timer_5")
+    elseif timeLeft == 3  then broadcastTranslated("vote_timer_3")
+    elseif timeLeft == 1  then broadcastTranslated("vote_timer_1")
     end
     if elapsed >= VOTE_DURATION then endVote(false) end
 end
@@ -241,9 +327,9 @@ function onChatMessage(playerID, playerName, message)
     if newLimit then
         if isAdmin(playerID) then
             SetMaxPerformanceRating(tonumber(newLimit))
-            MP.SendChatMessage(-1, string.format("[ADMIN] %s set the limit to %d", playerName, getDisplayLimit()))
+            broadcastTranslated("admin_set_limit", {name = playerName, limit = getDisplayLimit()})
         else
-            MP.SendChatMessage(playerID, "❌ Only admins can use /setlimit")
+            MP.SendChatMessage(playerID, translateForPlayer(playerID, "admin_only_setlimit"))
         end
         return 1
     end
@@ -256,13 +342,13 @@ function onChatMessage(playerID, playerName, message)
         if message == "/endvote" then
             if isAdmin(playerID) then
                 if voteInProgress then
-                    MP.SendChatMessage(-1, string.format("[ADMIN] %s ended the vote early", playerName))
+                    broadcastTranslated("vote_admin_ended", {name = playerName})
                     endVote(true)
                 else
-                    MP.SendChatMessage(playerID, "No vote is in progress")
+                    MP.SendChatMessage(playerID, translateForPlayer(playerID, "vote_none_in_progress"))
                 end
             else
-                MP.SendChatMessage(playerID, "❌ Only admins can end votes early")
+                MP.SendChatMessage(playerID, translateForPlayer(playerID, "vote_only_admins_end"))
             end
             return 1
         end
@@ -274,40 +360,45 @@ function onChatMessage(playerID, playerName, message)
     end
 
     if message == "/limit" then
-        MP.SendChatMessage(playerID, string.format(
-            "📊 Current server limit: %d (cars above this will be frozen)", getDisplayLimit()))
+        MP.SendChatMessage(playerID, translateForPlayer(playerID, "perf_limit_info", {limit = getDisplayLimit()}))
         if VOTE_ENABLED and voteInProgress then
             local timeLeft = VOTE_DURATION - (os.time() - voteStartTime)
-            MP.SendChatMessage(playerID, string.format("🗳️ Vote in progress! %d seconds left to vote", timeLeft))
+            MP.SendChatMessage(playerID, translateForPlayer(playerID, "vote_limit_in_progress", {time = timeLeft}))
         end
         return 1
     end
 
     if message == "/perfhelp" then
-        MP.SendChatMessage(playerID, "━━━ 🏁 Performance Limiter Help ━━━")
-        MP.SendChatMessage(playerID, "This server limits car ratings to keep racing fair")
+        MP.SendChatMessage(playerID, translateForPlayer(playerID, "perfhelp_title"))
+        MP.SendChatMessage(playerID, translateForPlayer(playerID, "perfhelp_description"))
         MP.SendChatMessage(playerID, "")
-        MP.SendChatMessage(playerID, "📋 Commands:")
-        MP.SendChatMessage(playerID, "/limit - Show current server limit")
+        MP.SendChatMessage(playerID, translateForPlayer(playerID, "perfhelp_commands_header"))
+        MP.SendChatMessage(playerID, translateForPlayer(playerID, "perfhelp_limit_cmd"))
         if VOTE_ENABLED then
-            MP.SendChatMessage(playerID, "/vote [number] - Vote to change the limit")
+            MP.SendChatMessage(playerID, translateForPlayer(playerID, "perfhelp_vote_cmd"))
         end
         if isAdmin(playerID) then
             MP.SendChatMessage(playerID, "")
-            MP.SendChatMessage(playerID, "👑 Admin Commands:")
+            MP.SendChatMessage(playerID, translateForPlayer(playerID, "perfhelp_admin_header"))
             if VOTE_ENABLED then
-                MP.SendChatMessage(playerID, "/startvote - Start a community vote")
-                MP.SendChatMessage(playerID, "/endvote - End vote early")
+                MP.SendChatMessage(playerID, translateForPlayer(playerID, "perfhelp_startvote_cmd"))
+                MP.SendChatMessage(playerID, translateForPlayer(playerID, "perfhelp_endvote_cmd"))
             end
-            MP.SendChatMessage(playerID, "/setlimit [number] - Change limit instantly")
+            MP.SendChatMessage(playerID, translateForPlayer(playerID, "perfhelp_setlimit_cmd"))
         end
         MP.SendChatMessage(playerID, "")
-        MP.SendChatMessage(playerID, "💡 Check the colored values in the app:")
-        MP.SendChatMessage(playerID, "🔴 Red = maxed out | 🟠 Orange = medium | 🟢 Green = can improve")
+        MP.SendChatMessage(playerID, translateForPlayer(playerID, "perfhelp_tips_header"))
+        MP.SendChatMessage(playerID, translateForPlayer(playerID, "perfhelp_tips_colors"))
         return 1
     end
 
     return 0
+end
+
+function onPlayerSetLang(playerID, beamng_lang)
+    local resolved = resolveBeamNGLocale(beamng_lang) or "en"
+    playerLang[playerID] = resolved
+    sendTranslationsToClient(playerID)
 end
 
 function onPlayerJoin(playerID)
@@ -315,13 +406,14 @@ function onPlayerJoin(playerID)
     playerViolations[playerID]       = 0
     playerReadyStatus[playerID]      = true
     playerLastWarnedRating[playerID] = nil
+    playerLang[playerID]             = "en"
     activePlayerCount = activePlayerCount + 1
 
     MP.TriggerClientEvent(playerID, "PerfModReceiveLimit", tostring(getDisplayLimit()))
 
     if VOTE_ENABLED and voteInProgress then
         local timeLeft = VOTE_DURATION - (os.time() - voteStartTime)
-        MP.SendChatMessage(playerID, string.format("[VOTE] A vote is in progress! %d seconds left", timeLeft))
+        MP.SendChatMessage(playerID, translateForPlayer(playerID, "vote_join_in_progress", {time = timeLeft}))
         local optionsStr = table.concat(VOTE_OPTIONS, ",")
         local voteData = string.format('{"options":[%s],"duration":%d,"starter":"%s","elapsed":%.1f}',
             optionsStr, VOTE_DURATION, voteStarterName, os.time() - voteStartTime)
@@ -349,6 +441,7 @@ function onPlayerDisconnect(playerID)
     playerViolations[playerID]       = nil
     playerReadyStatus[playerID]      = nil
     playerLastWarnedRating[playerID] = nil
+    playerLang[playerID]             = nil
 end
 
 function onVehicleDataReceived(playerID, data)
@@ -360,15 +453,13 @@ function onVehicleDataReceived(playerID, data)
     if currentRating > MAX_PERFORMANCE_RATING then
         if playerLastWarnedRating[playerID] ~= currentRating then
             playerViolations[playerID] = (playerViolations[playerID] or 0) + 1
-            MP.SendChatMessage(playerID, string.format(
-                "❌ Your car (%d) exceeds server limit (%d) 🔒 FROZEN - Please spawn a different vehicle",
-                currentRating, getDisplayLimit()))
+            MP.SendChatMessage(playerID, translateForPlayer(playerID, "perf_frozen", {rating = currentRating, limit = getDisplayLimit()}))
             playerLastWarnedRating[playerID] = currentRating
         end
         MP.TriggerClientEvent(playerID, "PerfModFreezeVehicle", "")
     else
         if playerLastWarnedRating[playerID] then
-            MP.SendChatMessage(playerID, "✅ Perfect! Your car is within the limit!")
+            MP.SendChatMessage(playerID, translateForPlayer(playerID, "perf_unfrozen"))
             playerLastWarnedRating[playerID] = nil
         end
         playerViolations[playerID] = 0
@@ -384,17 +475,19 @@ end
 -- INITIALIZATION
 -- =============================================================================
 loadConfig()
+loadTranslations()
 
 MP.RegisterEvent("onPlayerJoin",        "onPlayerJoin")
 MP.RegisterEvent("onPlayerDisconnect",  "onPlayerDisconnect")
 MP.RegisterEvent("PerfModCheckVehicle", "onVehicleDataReceived")
 MP.RegisterEvent("PerfModRequestLimit", "onRequestLimit")
 MP.RegisterEvent("onChatMessage",       "onChatMessage")
+MP.RegisterEvent("PerfModSetLang",      "onPlayerSetLang")
 
 if VOTE_ENABLED then
     MP.RegisterEvent("PerfModPlayerVote", "onPlayerVote")
     MP.CreateEventTimer("VoteTimerTick", 1000)
-    MP.RegisterEvent("VoteTimerTick", "onVoteTimerTick")
+    MP.RegisterEvent("VoteTimerTick",     "onVoteTimerTick")
 end
 
 print("[PerformanceLimiter] Loaded - limit: " .. MAX_PERFORMANCE_RATING)

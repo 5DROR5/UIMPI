@@ -372,7 +372,18 @@ local function try_register()
     AddEventHandler("PerfModVoteUpdate",             onVoteUpdate)
     AddEventHandler("PerfModVoteEnded",              onVoteEnded)
     AddEventHandler("updatePlayerPerformanceRating", onReceivePlayerRating)
+    AddEventHandler("PerfModTranslations",           function(payload)
+        guihooks.trigger('PerfModTranslations', payload)
+    end)
     M.registered_events = true
+end
+
+M.onExtensionLoaded = function()
+    M.registered_events = false
+    if TriggerServerEvent then
+        local lang = (settings and settings.getValue and settings.getValue("userLanguage")) or ""
+        TriggerServerEvent("PerfModSetLang", lang)
+    end
 end
 
 -- =============================================================================
