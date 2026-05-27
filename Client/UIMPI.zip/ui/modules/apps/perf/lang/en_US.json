@@ -1,0 +1,5 @@
+{
+  "banner_limit": "For fair and fun gameplay, this server limits vehicles to a Performance Rating of {limit}.",
+  "banner_over": "Your car is {delta} over the allowed limit. Please lower your Performance Rating to continue.",
+  "banner_tip": "Tip: try reducing engine power, tire grip, or braking force — or switch to a different car."
+}
