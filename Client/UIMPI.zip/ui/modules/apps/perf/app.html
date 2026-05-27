@@ -24,23 +24,23 @@
             </div>
 
             <div class="stats-column">
-                <p class="stats-header">Brakes</p>
-                <p class="stats-value">{{brakeTorque | number:0}}</p>
-            </div>
-
-            <div class="stats-column">
-                <p class="stats-header">Grip</p>
-                <p class="stats-value">{{avgFriction | number:4}}</p>
-            </div>
-
-            <div class="stats-column">
                 <p class="stats-header">Torque</p>
                 <p class="stats-value">{{perfTorque | number:0}}</p>
             </div>
 
             <div class="stats-column">
+                <p class="stats-header">Brakes</p>
+                <p class="stats-value" ng-class="getBrakeClass()">{{brakeTorque | number:0}}</p>
+            </div>
+
+            <div class="stats-column">
+                <p class="stats-header">Grip</p>
+                <p class="stats-value" ng-class="getGripClass()">{{avgFriction | number:4}}</p>
+            </div>
+
+            <div class="stats-column">
                 <p class="stats-header">Drivetrain</p>
-                <p class="stats-value">{{drivetrain}}</p>
+                <p class="stats-value" ng-class="getDrivetrainClass()">{{drivetrain}}</p>
             </div>
 
             <div class="stats-column">
@@ -55,9 +55,19 @@
 
             <div class="stats-column">
                 <p class="stats-header">Gearbox</p>
-                <p class="stats-value">{{gearboxType | uppercase}} {{gearCount}}</p>
+                <p class="stats-value">{{gearboxType}}</p>
             </div>
         </div>
+    </div>
+
+    <div class="over-limit-banner" ng-show="!isVehicleAllowed">
+        <div class="over-limit-row1">
+            &#128683; {{bannerRow1}}
+        </div>
+        <div class="over-limit-row2">
+            {{bannerRow2Pre}}<span class="over-limit-delta">{{rating - serverDisplayRating}}</span>{{bannerRow2Post}}
+        </div>
+        <div class="over-limit-row3">{{bannerRow3}}</div>
     </div>
 
     <div class="vote-panel" ng-show="voteActive">
